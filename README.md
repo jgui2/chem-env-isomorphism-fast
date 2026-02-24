@@ -131,7 +131,7 @@ Each configuration is inserted into a dictionary bucket based on its canonical k
 
 ### Complexity and Memory Improvement
 
-## Previous Complexity
+#### Previous Complexity
 
 Let:
 
@@ -151,7 +151,7 @@ where T_iso is the cost of a single graph isomorphism.
 
 This leads to poor scalability as both C and G grow.
 
-### New Complexity
+#### New Complexity
 
 For each configuration:
 
