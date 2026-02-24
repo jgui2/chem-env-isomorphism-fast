@@ -1,187 +1,153 @@
 # chem-env-isomorphism-fast
 Memory-efficient chemical environment isomorphism checker (igraph + bliss)
-# Fast Chemical Environment Isomorphism & Deduplication
+# Fast Chemical Environment Isomorphism Backend
 
-Memory-efficient and accelerated graph isomorphism and environment grouping for heterogeneous catalysis workflows.
+Accelerated and memory-efficient graph isomorphism backend for chemical environment grouping workflows.
 
 ---
 
 ## Overview
 
-This repository provides a scalable implementation for:
+This repository provides an optimized backend implementation for chemical graph isomorphism checking used in environment grouping workflows.
 
-- Fast chemical graph isomorphism checking  
-- Environment grouping (Step2 in workflow)  
-- Reduced memory usage for large configuration sets  
+The workflow-level Step2 code remains largely unchanged.  
+Performance improvement comes from replacing the underlying isomorphism and environment comparison logic.
 
 Target graph type:
 
-- Undirected graphs  
-- Nodes represent atoms  
-- Edges represent bonds  
-- Each node has `"element"` attribute (e.g. `"Pt"`, `"C"`, `"O"`, `"H"`)  
-- Bounded valence (chemical graphs)
+- Undirected graphs
+- Nodes represent atoms
+- Edges represent bonds
+- Node attribute `"element"` defines atom type
+- Bounded valence chemical graphs
+
+---
+## Context
+
+This repository contains an optimized backend extracted from an existing chemical environment grouping workflow.
+
+Originally, environment grouping (Step2) was implemented inside a larger catalysis workflow and relied on:
+
+- NetworkX-based isomorphism (VF2)
+- Object-level pairwise environment comparison
+
+This repository isolates and replaces that backend with:
+
+- bliss-based colored graph isomorphism (via igraph)
+- canonical hash-based environment comparison
+
+The external Step2 workflow code remains structurally unchanged and continues to call:
+
+```python
+unique_chem_envs(chem_envs_groups, metadata=paths)
+```
+
+Thus, this repository serves as a drop-in backend replacement for accelerating environment comparison without modifying workflow-level logic.
 
 ---
 
-# 1. Isomorphism Checker
+
+# 1. Isomorphism Backend
 
 ### Class
 
 `LuksIsomorphism`
 
-### Input
+### Purpose
 
-Two NetworkX graphs that:
+Provide fast element-preserving graph isomorphism checking.
 
-- Are undirected  
-- Contain node attribute `"element"`  
+### Pipeline
 
-### Output
+#### Stage 1 — Cheap Invariants
 
-Boolean value indicating element-preserving isomorphism.
+- Node count
+- Edge count
+- Degree sequence
+- Multiset of element labels
 
----
+Early rejection avoids expensive checks.
 
-## Algorithm
+#### Stage 2 — Exact Colored Isomorphism
 
-The checker uses a two-stage pipeline:
+- Convert NetworkX → igraph
+- Encode `"element"` as vertex color
+- Use `igraph.Graph.isomorphic_bliss()`
 
-### Stage 1 — Cheap Invariants (Early Rejection)
-
-Before running exact isomorphism:
-
-- Compare number of nodes  
-- Compare number of edges  
-- Compare sorted degree sequence  
-- Compare sorted multiset of element labels  
-
-If any mismatch occurs, graphs are rejected immediately.
+This replaces NetworkX VF2-based isomorphism.
 
 ---
 
-### Stage 2 — Exact Colored Isomorphism (bliss backend)
+# 2. Canonical Hash-Based Environment Comparison
 
-If invariants match:
+The main structural improvement is replacing object-based comparison with canonical key comparison.
 
-1. Convert NetworkX → igraph  
-2. Encode element types as vertex colors  
-3. Call:
+Instead of storing graph objects and performing repeated pairwise comparisons:
 
-```python
-igraph.Graph.isomorphic_bliss()
-```
-
-This approach is significantly faster than NetworkX VF2 for bounded-valence chemical graphs.
+- Each graph is converted to a canonical representation
+- Canonical representation is hashed (BLAKE2b)
+- Environment groups are represented by sorted tuples of graph hash keys
+- Grouping is performed using dictionary bucketing
 
 ---
 
-# 2. Step2 Optimization (Environment Deduplication)
+# 3. Effect on Step2 Workflow
 
-## Previous Implementation
+The external Step2 workflow code:
 
-Old `unique_chem_envs`:
+- Still calls `unique_chem_envs`
+- Still groups chemical environments
+- Logic structure unchanged
 
-- Stored full graph objects  
-- Compared new group against all stored groups  
-- Used pairwise isomorphism checks  
+Performance improvement comes from:
 
-Result:
+- Faster isomorphism backend
+- Elimination of repeated pairwise comparisons
+- Reduced memory usage (no graph objects retained)
 
-- O(N²) comparisons  
-- High memory usage  
-- Poor scalability  
-
----
-
-## New Implementation — Canonical Key Bucketing
-
-Instead of storing graph objects, we compute canonical hash keys.
-
-### For each graph:
-
-1. Convert NetworkX → igraph  
-2. Compute canonical permutation via bliss  
-3. Generate canonical representation (colors + edges)  
-4. Hash using BLAKE2b  
-
-### For each environment group:
-
-- Build sorted tuple of graph hash keys  
-- Use tuple as dictionary key  
-- Bucket indices directly  
+Thus Step2 runtime and memory footprint are significantly reduced without altering workflow-level logic.
 
 ---
 
-## Why This Is Faster
+# 4. Usage
 
-- No graph objects stored after key generation  
-- No O(N²) pairwise comparisons  
-- Dictionary-based grouping (~O(N))  
-- Fixed-size byte hashes reduce memory footprint  
-
----
-
-# 3. Usage
-
-## A. Isomorphism Check
+## Isomorphism Check
 
 ```python
 from chemical_environment_new import LuksIsomorphism
 
 luks = LuksIsomorphism()
 result = luks.is_isomorphic(G1, G2)
-
-print(result)
 ```
 
-`G1` and `G2` must be NetworkX graphs with `"element"` node attributes.
-
----
-
-## B. Environment Deduplication (Step2)
+## Environment Grouping (Called by Step2)
 
 ```python
 from chemical_environment_new import unique_chem_envs
 
 groups = unique_chem_envs(chem_envs_groups, metadata=paths)
-
-for bucket in groups:
-    print("Duplicate group:")
-    print(bucket)
 ```
-
-Return value:
-
-- List of buckets  
-- Each bucket contains metadata entries for isomorphic groups  
 
 ---
 
-# 4. Assumptions
+# 5. Assumptions
 
-- Undirected graphs  
-- No self-loops  
-- No multi-edges  
-- Element-preserving mapping  
-- Bounded valence  
+- Undirected graphs
+- No self-loops
+- No multi-edges
+- Element-preserving mapping
+- Bounded valence
 
 ---
 
-# 5. Dependencies
+# 6. Dependencies
 
-Python ≥ 3.9
+- networkx
+- numpy
+- ase
+- python-igraph
 
-Required packages:
-
-```
-networkx
-numpy
-ase
-python-igraph
-```
-
-Recommended igraph installation:
+Recommended installation:
 
 ```
 conda install -c conda-forge python-igraph
@@ -191,10 +157,9 @@ conda install -c conda-forge python-igraph
 
 # Summary
 
-This implementation improves:
+This implementation optimizes the backend of chemical environment comparison by:
 
-- Isomorphism speed via bliss backend  
-- Step2 scalability via canonical hashing  
-- Memory efficiency by avoiding graph object storage  
-
-Designed for large-scale adsorbate configuration enumeration workflows.
+- Replacing VF2 with bliss-based colored isomorphism
+- Introducing canonical hash-based grouping
+- Reducing memory usage
+- Accelerating Step2 workflow execution without modifying workflow logic
