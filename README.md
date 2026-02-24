@@ -155,11 +155,9 @@ conda install -c conda-forge python-igraph
 
 ---
 
-# Summary
+# 7. Changes compared to the original workflow
 
-This implementation optimizes the backend of chemical environment comparison by:
-
-- Replacing VF2 with bliss-based colored isomorphism
-- Introducing canonical hash-based grouping
-- Reducing memory usage
-- Accelerating Step2 workflow execution without modifying workflow logic
+- Replaced NetworkX VF2 isomorphism with igraph/bliss colored isomorphism.
+- Added cheap invariants for early rejection.
+- Added canonical digest keys (BLAKE2b) to represent graphs/environments.
+- Minor Step2 memory tweaks.
