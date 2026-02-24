@@ -30,7 +30,7 @@ unique_chem_envs(chem_envs_groups, metadata=paths)
 
 Minor improvements were also introduced in Step2 to reduced temporary memory usage.
 
-The overall Step2 logic remains unchanged, but now benefits from a redesigned comparison pipeline.
+The overall Step2 logic remains unchanged, but is now faster and more efficient with a redesigned comparison pipeline.
 
 ---
 
